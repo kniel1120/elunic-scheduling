@@ -1,0 +1,840 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Elunic Scheduling Dashboard</title>
+<link rel="icon" type="image/png" href="logo.png" />
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1f232c;
+    --border: #262b36;
+    --text: #e7eaf0;
+    --muted: #8b93a3;
+    --accent: #6aa6ff;
+    --accent-2: #8b5cf6;
+    --green: #10b981;
+    --green-soft: #1f3a31;
+    --red: #ef4444;
+    --red-soft: #3a1f23;
+    --amber: #f59e0b;
+    --amber-soft: #3a2e1f;
+    --purple: #a855f7;
+    --purple-soft: #2c1f3a;
+    --pink: #ec4899;
+    --pink-soft: #3a1f30;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.45; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  button { font-family: inherit; font-size: 13px; cursor: pointer; }
+
+  header.top {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 28px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #131620 0%, #0f1115 100%);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.2px; }
+  .brand .sub { color: var(--muted); font-size: 12px; }
+  .logo {
+    width: 40px; height: 40px; border-radius: 8px;
+    overflow: hidden; display: grid; place-items: center;
+    background: #3a1b4f;
+  }
+  .logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .actions { display: flex; gap: 8px; align-items: center; }
+  .btn {
+    background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); padding: 8px 14px; border-radius: 8px;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .btn:hover { background: #2a3040; border-color: #3a4252; }
+  .btn.primary {
+    background: linear-gradient(135deg, #6aa6ff, #8b5cf6);
+    color: #0f1115; border: none; font-weight: 600;
+  }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn.ghost { background: transparent; }
+  .btn.danger { color: #ff8a8a; }
+
+  main { padding: 24px 28px 60px; max-width: 1500px; margin: 0 auto; }
+
+  .summary-row {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 22px;
+  }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px;
+  }
+  .stat .label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .stat .value { font-size: 26px; font-weight: 700; margin-top: 6px; }
+  .stat .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
+  .stat.today { border-color: #2a4a3a; background: linear-gradient(180deg, #182721 0%, #171a21 100%); }
+  .stat.tomorrow { border-color: #3d2e1a; background: linear-gradient(180deg, #2a2317 0%, #171a21 100%); }
+
+  .section {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    margin-bottom: 22px; overflow: hidden;
+  }
+  .section h2 {
+    margin: 0; padding: 16px 18px; font-size: 15px; font-weight: 600;
+    display: flex; align-items: center; justify-content: space-between;
+    border-bottom: 1px solid var(--border); background: var(--panel-2);
+  }
+  .section h2 .count {
+    background: var(--border); color: var(--text); padding: 2px 10px;
+    border-radius: 999px; font-size: 12px; font-weight: 500;
+  }
+  .section.today h2 { color: #6ee7b7; }
+  .section.today h2::before { content: "●"; margin-right: 8px; color: var(--green); }
+  .section.tomorrow h2 { color: #fbbf24; }
+  .section.tomorrow h2::before { content: "●"; margin-right: 8px; color: var(--amber); }
+
+  .empty { padding: 28px; color: var(--muted); text-align: center; }
+
+  table.candidates { width: 100%; border-collapse: collapse; }
+  table.candidates th {
+    text-align: left; padding: 10px 14px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.6px; color: var(--muted); background: var(--panel-2);
+    border-bottom: 1px solid var(--border); position: sticky; top: 0;
+  }
+  table.candidates td {
+    padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle;
+  }
+  table.candidates tr:last-child td { border-bottom: none; }
+  table.candidates tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .name-cell { font-weight: 500; }
+  .time-cell { font-variant-numeric: tabular-nums; color: var(--muted); }
+  .time-cell .date { color: var(--text); display: block; font-weight: 500; }
+
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 600; letter-spacing: 0.2px; white-space: nowrap;
+  }
+  .badge.concluded { background: var(--green-soft); color: #6ee7b7; border: 1px solid #2a4a3a; }
+  .badge.decline { background: var(--red-soft); color: #fca5a5; border: 1px solid #4a2a2a; }
+  .badge.invitation-sent { background: var(--purple-soft); color: #d8b4fe; border: 1px solid #4a2a5a; }
+  .badge.confirm { background: #1a3a2e; color: #86efac; border: 1px solid #2a4a3a; }
+  .badge.scheduled { background: #1a2e3a; color: #93c5fd; border: 1px solid #2a3a4a; }
+  .badge.interviewer-christina { background: var(--pink-soft); color: #f9a8d4; border: 1px solid #4a2a3a; }
+  .badge.interviewer-mira { background: var(--purple-soft); color: #d8b4fe; border: 1px solid #4a2a5a; }
+  .badge.day-today { background: #1a3a2e; color: #6ee7b7; border: 1px solid #2a4a3a; }
+  .badge.day-tomorrow { background: #3a2e1a; color: #fbbf24; border: 1px solid #4a3a2a; }
+  .badge.day-overdue { background: var(--red-soft); color: #fca5a5; border: 1px solid #4a2a2a; }
+  .badge.day-upcoming { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
+  .badge.day-past { background: var(--panel-2); color: #555c6b; border: 1px solid var(--border); }
+
+  .row-actions { display: flex; gap: 6px; }
+  .row-actions button {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 5px 10px; border-radius: 6px; font-size: 12px;
+  }
+  .row-actions button:hover { background: #2a3040; }
+
+  .toolbar {
+    display: flex; gap: 10px; align-items: center; padding: 12px 18px;
+    border-bottom: 1px solid var(--border); background: var(--panel-2);
+  }
+  .toolbar input[type="search"] {
+    flex: 1; background: var(--panel); color: var(--text);
+    border: 1px solid var(--border); padding: 8px 12px; border-radius: 8px;
+    font-family: inherit; font-size: 13px;
+  }
+  .toolbar input[type="search"]:focus { outline: none; border-color: var(--accent); }
+  .toolbar select {
+    background: var(--panel); color: var(--text); border: 1px solid var(--border);
+    padding: 8px 10px; border-radius: 8px; font-family: inherit; font-size: 13px;
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+    width: 100%; max-width: 520px; padding: 22px; max-height: 90vh; overflow-y: auto;
+  }
+  .modal h3 { margin: 0 0 18px 0; font-size: 16px; }
+  .field { margin-bottom: 12px; }
+  .field label { display: block; color: var(--muted); font-size: 12px; margin-bottom: 5px; }
+  .field input, .field select, .field textarea {
+    width: 100%; background: var(--panel-2); color: var(--text);
+    border: 1px solid var(--border); padding: 8px 10px; border-radius: 6px;
+    font-family: inherit; font-size: 13px;
+  }
+  .field textarea { resize: vertical; min-height: 60px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  .toast {
+    position: fixed; bottom: 24px; right: 24px; background: var(--panel);
+    border: 1px solid var(--border); padding: 12px 18px; border-radius: 8px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4); transform: translateY(100px);
+    opacity: 0; transition: all 0.3s; z-index: 200; max-width: 320px;
+  }
+  .toast.show { transform: translateY(0); opacity: 1; }
+  .toast.success { border-color: #2a4a3a; }
+  .toast.error { border-color: #4a2a2a; }
+
+  .followup-card {
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+    display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center;
+  }
+  .followup-card:last-child { border-bottom: none; }
+  .followup-card .who { display: flex; flex-direction: column; gap: 4px; }
+  .followup-card .who .name { font-weight: 600; font-size: 14px; }
+  .followup-card .who .meta { color: var(--muted); font-size: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+  .followup-card .who .note {
+    font-size: 12px; color: #fbbf24; margin-top: 2px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .followup-actions { display: flex; gap: 6px; }
+
+  .filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+  .pill {
+    padding: 4px 12px; border-radius: 999px; font-size: 12px;
+    background: var(--panel); border: 1px solid var(--border);
+    color: var(--muted); cursor: pointer;
+  }
+  .pill.active { background: var(--accent); color: #0f1115; border-color: var(--accent); font-weight: 600; }
+
+  @media (max-width: 900px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    main { padding: 16px; }
+    header.top { padding: 14px 16px; flex-wrap: wrap; gap: 10px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <div class="logo"><img src="logo.png" alt="elunic" /></div>
+    <div>
+      <h1>Elunic Scheduling</h1>
+      <div class="sub" id="todayLabel"></div>
+    </div>
+  </div>
+  <div class="actions">
+    <input type="file" id="csvFile" accept=".csv" style="display:none" />
+    <button class="btn ghost" onclick="document.getElementById('csvFile').click()">Import CSV</button>
+    <button class="btn ghost" onclick="exportCsv()">Export CSV</button>
+    <button class="btn ghost danger" onclick="clearAll()">Clear all</button>
+    <button class="btn primary" onclick="openModal()">+ Add Candidate</button>
+  </div>
+</header>
+
+<main>
+  <!-- Stats -->
+  <section class="summary-row">
+    <div class="stat today">
+      <div class="label">Today</div>
+      <div class="value" id="statToday">0</div>
+      <div class="hint">interviews scheduled</div>
+    </div>
+    <div class="stat tomorrow">
+      <div class="label">Tomorrow</div>
+      <div class="value" id="statTomorrow">0</div>
+      <div class="hint">send follow-ups</div>
+    </div>
+    <div class="stat">
+      <div class="label">This Week</div>
+      <div class="value" id="statWeek">0</div>
+      <div class="hint">upcoming</div>
+    </div>
+    <div class="stat">
+      <div class="label">Total Tracked</div>
+      <div class="value" id="statTotal">0</div>
+      <div class="hint">all candidates</div>
+    </div>
+  </section>
+
+  <!-- Today -->
+  <section class="section today">
+    <h2>Today's Interviews <span class="count" id="todayCount">0</span></h2>
+    <div id="todayList"></div>
+  </section>
+
+  <!-- Tomorrow / Follow-ups -->
+  <section class="section tomorrow">
+    <h2>Tomorrow — Send Follow-ups <span class="count" id="tomorrowCount">0</span></h2>
+    <div id="tomorrowList"></div>
+  </section>
+
+  <!-- Full table -->
+  <section class="section">
+    <h2>All Candidates <span class="count" id="totalCount">0</span></h2>
+    <div class="toolbar">
+      <input type="search" id="search" placeholder="Search by name, status, interviewer, notes…" />
+      <div class="filter-pills" id="filterPills">
+        <span class="pill active" data-filter="all">All</span>
+        <span class="pill" data-filter="upcoming">Upcoming</span>
+        <span class="pill" data-filter="today">Today</span>
+        <span class="pill" data-filter="tomorrow">Tomorrow</span>
+        <span class="pill" data-filter="past">Past</span>
+      </div>
+      <select id="interviewerFilter">
+        <option value="">All interviewers</option>
+      </select>
+    </div>
+    <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+      <table class="candidates">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>When</th>
+            <th>Status</th>
+            <th>Interviewer</th>
+            <th>Notes</th>
+            <th>Day</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="allList"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<!-- Confirm modal -->
+<div class="modal-backdrop" id="confirmBackdrop">
+  <div class="modal" style="max-width: 420px;">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p id="confirmBody" style="color: var(--muted); margin: 0 0 18px;"></p>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="confirmCancel()">Cancel</button>
+      <button class="btn" id="confirmOkBtn" style="background: var(--red); color: white; border: none;">Yes, delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Edit/Add modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <h3 id="modalTitle">Add candidate</h3>
+    <div class="field"><label>Name</label><input id="f-name" /></div>
+    <div class="field"><label>Profile link</label><input id="f-link" placeholder="https://app.teamtailor.com/..." /></div>
+    <div class="field-row">
+      <div class="field"><label>Interview type</label>
+        <select id="f-type">
+          <option>Interview</option>
+          <option>Screening</option>
+          <option>Technical</option>
+          <option>Final</option>
+        </select>
+      </div>
+      <div class="field"><label>Interviewer</label><input id="f-interviewer" /></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Date</label><input id="f-date" type="date" /></div>
+      <div class="field"><label>Time</label><input id="f-time" type="time" /></div>
+    </div>
+    <div class="field"><label>Status</label>
+      <select id="f-status">
+        <option>Invitation Sent</option>
+        <option>Confirm</option>
+        <option>Concluded</option>
+        <option>Decline</option>
+      </select>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="f-notes"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn danger" id="deleteBtn" style="display:none;margin-right:auto" onclick="deleteCurrent()">Delete</button>
+      <button class="btn ghost" onclick="closeModal()">Cancel</button>
+      <button class="btn primary" onclick="saveCandidate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Empty by default — use Import CSV (top-right) to load candidates from a Google Sheets export.
+const SEED = [];
+
+// ---------- State ----------
+const STORAGE_KEY = "elunic_scheduling_v1";
+let candidates = loadCandidates();
+let editingId = null;
+let activeFilter = "all";
+let activeInterviewer = "";
+let searchQuery = "";
+
+function loadCandidates() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  // first load: seed with IDs
+  return SEED.map((c, i) => ({ ...c, id: cryptoId(), link: "" }));
+}
+function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates)); }
+function cryptoId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+// ---------- Date helpers ----------
+function todayStr() {
+  // Use local date
+  const d = new Date();
+  return ymd(d);
+}
+function ymd(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function addDays(dateStr, n) {
+  const d = new Date(dateStr + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return ymd(d);
+}
+function dayDelta(dateStr) {
+  const a = new Date(todayStr() + "T00:00:00");
+  const b = new Date(dateStr + "T00:00:00");
+  return Math.round((b - a) / 86400000);
+}
+function fmtDate(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+function fmtTime(t) {
+  if (!t) return "";
+  const [h, m] = t.split(":").map(Number);
+  const ampm = h >= 12 ? "PM" : "AM";
+  const h12 = h % 12 || 12;
+  return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
+}
+function dayBadge(dateStr) {
+  const d = dayDelta(dateStr);
+  if (d === 0) return { cls: "day-today", text: "Today" };
+  if (d === 1) return { cls: "day-tomorrow", text: "Tomorrow" };
+  if (d < 0) return { cls: "day-past", text: `${-d}d ago` };
+  if (d <= 7) return { cls: "day-upcoming", text: `In ${d}d` };
+  return { cls: "day-upcoming", text: fmtDate(dateStr) };
+}
+
+// ---------- Render ----------
+function statusClass(s) {
+  return "badge " + (s || "").toLowerCase().replace(/\s+/g, "-");
+}
+function interviewerClass(name) {
+  return "badge interviewer-" + (name || "").toLowerCase().split(/\s/)[0];
+}
+
+function render() {
+  const today = todayStr();
+  const tomorrow = addDays(today, 1);
+  const weekEnd = addDays(today, 7);
+
+  const sorted = [...candidates].sort((a, b) => {
+    const k1 = (a.date || "9999") + "T" + (a.time || "00:00");
+    const k2 = (b.date || "9999") + "T" + (b.time || "00:00");
+    return k1.localeCompare(k2);
+  });
+
+  const todayList = sorted.filter(c => c.date === today);
+  const tomorrowList = sorted.filter(c => c.date === tomorrow);
+  const weekList = sorted.filter(c => c.date >= today && c.date < weekEnd);
+
+  // Stats
+  document.getElementById("statToday").textContent = todayList.length;
+  document.getElementById("statTomorrow").textContent = tomorrowList.length;
+  document.getElementById("statWeek").textContent = weekList.length;
+  document.getElementById("statTotal").textContent = candidates.length;
+  document.getElementById("todayCount").textContent = todayList.length;
+  document.getElementById("tomorrowCount").textContent = tomorrowList.length;
+  document.getElementById("totalCount").textContent = candidates.length;
+
+  // Today section
+  const todayEl = document.getElementById("todayList");
+  todayEl.innerHTML = todayList.length === 0
+    ? `<div class="empty">No interviews scheduled today.</div>`
+    : todayList.map(renderFollowupCard).join("");
+
+  // Tomorrow section
+  const tomorrowEl = document.getElementById("tomorrowList");
+  tomorrowEl.innerHTML = tomorrowList.length === 0
+    ? `<div class="empty">Nothing tomorrow yet — you're clear of follow-ups.</div>`
+    : tomorrowList.map(renderFollowupCard).join("");
+
+  // Interviewer filter dropdown
+  const interviewers = Array.from(new Set(candidates.map(c => c.interviewer).filter(Boolean))).sort();
+  const ivSel = document.getElementById("interviewerFilter");
+  const cur = ivSel.value;
+  ivSel.innerHTML = `<option value="">All interviewers</option>` +
+    interviewers.map(i => `<option ${cur === i ? "selected" : ""}>${esc(i)}</option>`).join("");
+
+  // Full table with filters
+  let list = sorted;
+  if (activeFilter === "today") list = list.filter(c => c.date === today);
+  else if (activeFilter === "tomorrow") list = list.filter(c => c.date === tomorrow);
+  else if (activeFilter === "upcoming") list = list.filter(c => c.date >= today);
+  else if (activeFilter === "past") list = list.filter(c => c.date < today).reverse();
+  if (activeInterviewer) list = list.filter(c => c.interviewer === activeInterviewer);
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    list = list.filter(c =>
+      (c.name || "").toLowerCase().includes(q) ||
+      (c.status || "").toLowerCase().includes(q) ||
+      (c.interviewer || "").toLowerCase().includes(q) ||
+      (c.notes || "").toLowerCase().includes(q)
+    );
+  }
+
+  const tbody = document.getElementById("allList");
+  tbody.innerHTML = list.length === 0
+    ? `<tr><td colspan="8" class="empty">No candidates match.</td></tr>`
+    : list.map(renderRow).join("");
+}
+
+function renderFollowupCard(c) {
+  const note = c.notes ? `<div class="note">📝 ${esc(c.notes)}</div>` : "";
+  const linkBtn = c.link
+    ? `<a class="btn ghost" href="${esc(c.link)}" target="_blank">Open profile</a>`
+    : "";
+  return `
+    <div class="followup-card">
+      <div class="who">
+        <div class="name">${esc(c.name)}</div>
+        <div class="meta">
+          <span>🕐 ${fmtTime(c.time)}</span>
+          <span>${fmtDate(c.date)}</span>
+          <span class="${interviewerClass(c.interviewer)}">${esc(c.interviewer || "—")}</span>
+          <span class="${statusClass(c.status)}">${esc(c.status || "—")}</span>
+        </div>
+        ${note}
+      </div>
+      <div class="followup-actions">
+        ${linkBtn}
+        <button class="btn" onclick="copyFollowup('${c.id}')">Copy follow-up</button>
+        <button class="btn" onclick="editCandidate('${c.id}')">Edit</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderRow(c) {
+  const db = dayBadge(c.date);
+  const link = c.link ? `<a href="${esc(c.link)}" target="_blank">↗</a>` : "";
+  return `
+    <tr>
+      <td class="name-cell">${esc(c.name)} ${link}</td>
+      <td>${esc(c.type || "")}</td>
+      <td class="time-cell">
+        <span class="date">${fmtDate(c.date)}</span>
+        ${fmtTime(c.time)}
+      </td>
+      <td><span class="${statusClass(c.status)}">${esc(c.status || "")}</span></td>
+      <td><span class="${interviewerClass(c.interviewer)}">${esc(c.interviewer || "")}</span></td>
+      <td style="color:var(--muted);font-size:12px;max-width:240px">${esc(c.notes || "")}</td>
+      <td><span class="badge ${db.cls}">${db.text}</span></td>
+      <td><div class="row-actions"><button onclick="editCandidate('${c.id}')">Edit</button></div></td>
+    </tr>
+  `;
+}
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
+// ---------- Modal ----------
+function openModal(id) {
+  editingId = id || null;
+  const c = id ? candidates.find(x => x.id === id) : { type: "Interview", status: "Invitation Sent", interviewer: "Christina" };
+  if (!c) return;
+  document.getElementById("modalTitle").textContent = id ? "Edit candidate" : "Add candidate";
+  document.getElementById("f-name").value = c.name || "";
+  document.getElementById("f-link").value = c.link || "";
+  document.getElementById("f-type").value = c.type || "Interview";
+  document.getElementById("f-interviewer").value = c.interviewer || "";
+  document.getElementById("f-date").value = c.date || todayStr();
+  document.getElementById("f-time").value = c.time || "09:00";
+  document.getElementById("f-status").value = c.status || "Invitation Sent";
+  document.getElementById("f-notes").value = c.notes || "";
+  document.getElementById("deleteBtn").style.display = id ? "inline-block" : "none";
+  document.getElementById("modalBackdrop").classList.add("open");
+}
+function closeModal() {
+  document.getElementById("modalBackdrop").classList.remove("open");
+  editingId = null;
+}
+function editCandidate(id) { openModal(id); }
+function saveCandidate() {
+  const data = {
+    name: document.getElementById("f-name").value.trim(),
+    link: document.getElementById("f-link").value.trim(),
+    type: document.getElementById("f-type").value,
+    interviewer: document.getElementById("f-interviewer").value.trim(),
+    date: document.getElementById("f-date").value,
+    time: document.getElementById("f-time").value,
+    status: document.getElementById("f-status").value,
+    notes: document.getElementById("f-notes").value.trim(),
+  };
+  if (!data.name) return toast("Name required", "error");
+  if (!data.date) return toast("Date required", "error");
+  if (editingId) {
+    const idx = candidates.findIndex(c => c.id === editingId);
+    candidates[idx] = { ...candidates[idx], ...data };
+    toast("Updated " + data.name);
+  } else {
+    candidates.push({ id: cryptoId(), ...data });
+    toast("Added " + data.name);
+  }
+  save(); closeModal(); render();
+}
+function deleteCurrent() {
+  if (!editingId) return;
+  const c = candidates.find(x => x.id === editingId);
+  const id = editingId;
+  askConfirm({
+    title: `Delete ${c.name}?`,
+    body: "This candidate will be permanently removed.",
+    okLabel: "Yes, delete",
+    onConfirm: () => {
+      candidates = candidates.filter(x => x.id !== id);
+      save(); closeModal(); render();
+      toast("Deleted " + c.name);
+    },
+  });
+}
+
+// ---------- Follow-up template ----------
+function copyFollowup(id) {
+  const c = candidates.find(x => x.id === id);
+  if (!c) return;
+  const deDate = new Date(c.date + "T00:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const deTime = c.time ? `${c.time} Uhr` : "";
+  const tpl =
+`Hallo ${c.name.split(" ")[0]},
+
+eine kurze Erinnerung an unser Interview am ${deDate} um ${deTime}.
+
+Bitte gib mir kurz Bescheid, falls sich auf deiner Seite etwas geändert hat. Solltest du vorab noch Fragen haben, melde dich gerne jederzeit bei mir.
+
+Ich freue mich auf unser Gespräch.
+
+Viele Grüße
+elunic Recruiting Team`;
+  navigator.clipboard.writeText(tpl).then(
+    () => toast("Follow-up copied to clipboard"),
+    () => toast("Couldn't copy — your browser blocked it", "error")
+  );
+}
+
+// ---------- CSV import / export ----------
+document.getElementById("csvFile").addEventListener("change", (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => importCsv(reader.result);
+  reader.readAsText(f);
+});
+
+function importCsv(text) {
+  const rows = parseCsv(text);
+  if (rows.length < 2) return toast("Empty CSV", "error");
+  const header = rows[0].map(h => h.trim().toLowerCase());
+  const findCol = (...names) => {
+    for (const n of names) {
+      const i = header.indexOf(n);
+      if (i >= 0) return i;
+    }
+    return -1;
+  };
+  const cName = findCol("name", "candidate");
+  const cLink = findCol("profile link", "link", "profile");
+  const cType = findCol("interview type", "type");
+  const cDate = findCol("interview schedule", "date", "schedule");
+  const cTime = findCol("time");
+  const cStat = findCol("status");
+  const cInt = findCol("interviewer");
+  const cNotes = findCol("notes", "note");
+
+  if (cName < 0 || cDate < 0) return toast("CSV needs at least Name and Interview Schedule columns", "error");
+
+  let added = 0;
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r[cName] || !r[cName].trim()) continue;
+    candidates.push({
+      id: cryptoId(),
+      name: (r[cName] || "").trim(),
+      link: cLink >= 0 ? (r[cLink] || "").trim() : "",
+      type: cType >= 0 ? (r[cType] || "Interview").trim() : "Interview",
+      date: parseDateLoose((r[cDate] || "").trim()),
+      time: cTime >= 0 ? parseTimeLoose((r[cTime] || "").trim()) : "",
+      status: cStat >= 0 ? (r[cStat] || "").trim() : "",
+      interviewer: cInt >= 0 ? (r[cInt] || "").trim() : "",
+      notes: cNotes >= 0 ? (r[cNotes] || "").trim() : "",
+    });
+    added++;
+  }
+  save(); render();
+  toast(`Imported ${added} candidates`);
+  document.getElementById("csvFile").value = "";
+}
+
+function parseCsv(text) {
+  // minimal CSV parser supporting quoted fields with commas/newlines
+  const rows = []; let row = []; let cur = ""; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQ) {
+      if (ch === '"' && text[i + 1] === '"') { cur += '"'; i++; }
+      else if (ch === '"') inQ = false;
+      else cur += ch;
+    } else {
+      if (ch === '"') inQ = true;
+      else if (ch === ",") { row.push(cur); cur = ""; }
+      else if (ch === "\n") { row.push(cur); rows.push(row); row = []; cur = ""; }
+      else if (ch === "\r") { /* skip */ }
+      else cur += ch;
+    }
+  }
+  if (cur.length || row.length) { row.push(cur); rows.push(row); }
+  return rows;
+}
+
+function parseDateLoose(s) {
+  if (!s) return "";
+  // Already ISO
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  // April/22/2026 or April 22 2026 or 4/22/2026
+  const months = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+  const cleaned = s.replace(/[\/,.]/g, " ").replace(/\s+/g, " ").trim();
+  const parts = cleaned.split(" ");
+  if (parts.length === 3) {
+    let y, m, d;
+    const p0 = parts[0].toLowerCase().slice(0, 3);
+    if (months[p0]) { m = months[p0]; d = +parts[1]; y = +parts[2]; }
+    else if (/^\d+$/.test(parts[1]) && /^\d+$/.test(parts[2])) { m = +parts[0]; d = +parts[1]; y = +parts[2]; }
+    if (y && m && d) return `${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  }
+  // Fallback to Date parsing
+  const dt = new Date(s);
+  if (!isNaN(dt)) return ymd(dt);
+  return "";
+}
+
+function parseTimeLoose(s) {
+  if (!s) return "";
+  if (/^\d{2}:\d{2}$/.test(s)) return s;
+  // 9:15:00 AM / 4:00 PM / 13:30
+  const m = s.match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*(AM|PM)?/i);
+  if (!m) return "";
+  let h = +m[1]; const min = m[2]; const ap = (m[3] || "").toUpperCase();
+  if (ap === "PM" && h < 12) h += 12;
+  if (ap === "AM" && h === 12) h = 0;
+  return `${String(h).padStart(2,"0")}:${min}`;
+}
+
+function clearAll() {
+  const total = candidates.length;
+  askConfirm({
+    title: "Clear all candidates?",
+    body: `This will permanently delete all ${total} candidates. This cannot be undone.`,
+    okLabel: "Yes, clear all",
+    onConfirm: () => {
+      // Second confirmation — destructive action requires two deliberate clicks.
+      askConfirm({
+        title: "Are you really sure?",
+        body: `Final check: all ${total} candidates will be permanently deleted. There's no undo.`,
+        okLabel: "Yes, I'm sure",
+        onConfirm: () => {
+          candidates = [];
+          save(); render();
+          toast("Cleared all candidates");
+        },
+      });
+    },
+  });
+}
+
+let confirmHandler = null;
+function askConfirm({ title, body, okLabel = "Confirm", onConfirm }) {
+  document.getElementById("confirmTitle").textContent = title;
+  document.getElementById("confirmBody").textContent = body;
+  document.getElementById("confirmOkBtn").textContent = okLabel;
+  confirmHandler = onConfirm;
+  document.getElementById("confirmBackdrop").classList.add("open");
+}
+function confirmCancel() {
+  document.getElementById("confirmBackdrop").classList.remove("open");
+  confirmHandler = null;
+}
+document.getElementById("confirmOkBtn").addEventListener("click", () => {
+  const fn = confirmHandler;
+  confirmCancel();
+  if (fn) fn();
+});
+document.getElementById("confirmBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "confirmBackdrop") confirmCancel();
+});
+
+function exportCsv() {
+  const header = ["Name","Profile Link","Interview Type","Interview Schedule","Time","Status","Interviewer","Notes"];
+  const lines = [header.join(",")];
+  for (const c of candidates) {
+    const row = [c.name, c.link, c.type, c.date, fmtTime(c.time), c.status, c.interviewer, c.notes].map(csvEsc);
+    lines.push(row.join(","));
+  }
+  const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `elunic-candidates-${todayStr()}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  toast("Exported CSV");
+}
+function csvEsc(s) {
+  s = String(s == null ? "" : s);
+  if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+
+// ---------- UI events ----------
+document.getElementById("search").addEventListener("input", (e) => { searchQuery = e.target.value; render(); });
+document.getElementById("interviewerFilter").addEventListener("change", (e) => { activeInterviewer = e.target.value; render(); });
+document.getElementById("filterPills").addEventListener("click", (e) => {
+  if (!e.target.classList.contains("pill")) return;
+  document.querySelectorAll(".pill").forEach(p => p.classList.remove("active"));
+  e.target.classList.add("active");
+  activeFilter = e.target.dataset.filter;
+  render();
+});
+document.getElementById("modalBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "modalBackdrop") closeModal();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeModal();
+});
+
+// ---------- Toast ----------
+let toastT;
+function toast(msg, kind = "success") {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.className = "toast show " + kind;
+  clearTimeout(toastT);
+  toastT = setTimeout(() => t.classList.remove("show"), 2400);
+}
+
+// ---------- Init ----------
+document.getElementById("todayLabel").textContent =
+  new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+render();
+</script>
+
+</body>
+</html>
