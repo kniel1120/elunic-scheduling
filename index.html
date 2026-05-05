@@ -49,6 +49,21 @@
     background: #3a1b4f;
   }
   .logo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+  .clock {
+    text-align: center; font-variant-numeric: tabular-nums;
+    background: var(--panel-2); border: 1px solid var(--border);
+    padding: 6px 18px; border-radius: 10px; min-width: 200px;
+    line-height: 1.25;
+  }
+  .clock-12 { font-size: 18px; font-weight: 600; letter-spacing: 0.4px; }
+  .clock-24 { font-size: 12px; color: var(--muted); }
+  .clock-tz {
+    font-size: 10px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.7px; margin-top: 2px;
+  }
+  .btn.alerts.on { color: #6ee7b7; border-color: #2a4a3a; }
+  .btn.alerts.blocked { color: #fca5a5; border-color: #4a2a2a; }
   .actions { display: flex; gap: 8px; align-items: center; }
   .btn {
     background: var(--panel-2); color: var(--text);
@@ -225,8 +240,14 @@
       <div class="sub" id="todayLabel"></div>
     </div>
   </div>
+  <div class="clock" title="Live Berlin time (Europe/Berlin)">
+    <div class="clock-12" id="clock12">--:-- --</div>
+    <div class="clock-24" id="clock24">--:--</div>
+    <div class="clock-tz" id="clockTz">Berlin</div>
+  </div>
   <div class="actions">
     <input type="file" id="csvFile" accept=".csv" style="display:none" />
+    <button class="btn ghost alerts" id="alertsBtn" onclick="requestAlerts()">🔔 Enable alerts</button>
     <button class="btn ghost" onclick="document.getElementById('csvFile').click()">Import CSV</button>
     <button class="btn ghost" onclick="exportCsv()">Export CSV</button>
     <button class="btn ghost danger" onclick="clearAll()">Clear all</button>
@@ -383,11 +404,19 @@ function save() { localStorage.setItem(STORAGE_KEY, JSON.stringify(candidates));
 function cryptoId() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
 // ---------- Date helpers ----------
-function todayStr() {
-  // Use local date
-  const d = new Date();
-  return ymd(d);
+// Everything date-related uses Berlin time, since that's where the interviews happen.
+function nowBerlin() {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Europe/Berlin",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(new Date());
+  const get = t => parts.find(p => p.type === t).value;
+  const date = `${get("year")}-${get("month")}-${get("day")}`;
+  const hour = +get("hour"), minute = +get("minute"), second = +get("second");
+  return { date, hour, minute, second, minutes: hour * 60 + minute };
 }
+function todayStr() { return nowBerlin().date; }
 function ymd(d) {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -830,9 +859,94 @@ function toast(msg, kind = "success") {
   toastT = setTimeout(() => t.classList.remove("show"), 2400);
 }
 
+// ---------- Clock (Berlin time) ----------
+function updateClock() {
+  const now = new Date();
+  const t12 = now.toLocaleTimeString("en-US", {
+    timeZone: "Europe/Berlin", hour: "numeric", minute: "2-digit", second: "2-digit", hour12: true,
+  });
+  const t24 = now.toLocaleTimeString("de-DE", {
+    timeZone: "Europe/Berlin", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  });
+  const tz = (new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Berlin", timeZoneName: "short" })
+    .formatToParts(now).find(p => p.type === "timeZoneName")?.value) || "";
+  document.getElementById("clock12").textContent = t12;
+  document.getElementById("clock24").textContent = t24 + " Uhr";
+  document.getElementById("clockTz").textContent = `Berlin · ${tz}`;
+}
+
+// ---------- Browser notifications: interview-start alerts ----------
+const NOTIFIED_KEY = "notified_ids_v1";
+
+function refreshAlertsButton() {
+  const btn = document.getElementById("alertsBtn");
+  btn.classList.remove("on", "blocked");
+  if (!("Notification" in window)) { btn.textContent = "🔕 Not supported"; btn.disabled = true; return; }
+  if (Notification.permission === "granted") { btn.textContent = "🔔 Alerts on"; btn.classList.add("on"); }
+  else if (Notification.permission === "denied") { btn.textContent = "🔕 Alerts blocked"; btn.classList.add("blocked"); }
+  else { btn.textContent = "🔔 Enable alerts"; }
+}
+
+function requestAlerts() {
+  if (!("Notification" in window)) return toast("Browser doesn't support notifications", "error");
+  if (Notification.permission === "granted") return toast("Alerts already on");
+  if (Notification.permission === "denied")
+    return toast("Alerts blocked — re-enable in your browser site settings", "error");
+  Notification.requestPermission().then(perm => {
+    refreshAlertsButton();
+    if (perm === "granted") {
+      toast("Alerts enabled — you'll be notified when interviews start");
+      // confirmation ping so user sees how it looks
+      try { new Notification("Elunic Scheduling", { body: "Alerts are on. You'll be pinged when an interview starts.", icon: "logo.png" }); } catch (e) {}
+      checkInterviewAlerts();
+    }
+  });
+}
+
+function checkInterviewAlerts() {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const berlin = nowBerlin();
+  let notified;
+  try { notified = new Set(JSON.parse(localStorage.getItem(NOTIFIED_KEY) || "[]")); }
+  catch (e) { notified = new Set(); }
+  let changed = false;
+  for (const c of candidates) {
+    if (!c.id || !c.date || !c.time) continue;
+    if (c.date !== berlin.date) continue;
+    if (notified.has(c.id)) continue;
+    const [h, m] = c.time.split(":").map(Number);
+    if (isNaN(h) || isNaN(m)) continue;
+    const target = h * 60 + m;
+    const diff = berlin.minutes - target;
+    // Fire when current time has reached interview time and we're within 5 min after.
+    // (Wider window risks alerting hours later if user opens the page late.)
+    if (diff >= 0 && diff <= 5) {
+      try {
+        new Notification("Interview starting now", {
+          body: `${c.name} — ${fmtTime(c.time)}${c.interviewer ? " with " + c.interviewer : ""}${c.status ? " · " + c.status : ""}`,
+          icon: "logo.png",
+          tag: "interview-" + c.id,
+          requireInteraction: false,
+        });
+      } catch (e) { /* ignore */ }
+      notified.add(c.id);
+      changed = true;
+    }
+  }
+  if (changed) localStorage.setItem(NOTIFIED_KEY, JSON.stringify([...notified]));
+}
+
 // ---------- Init ----------
 document.getElementById("todayLabel").textContent =
-  new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+  new Date().toLocaleDateString("en-US", {
+    timeZone: "Europe/Berlin",
+    weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
+updateClock();
+setInterval(updateClock, 1000);
+refreshAlertsButton();
+checkInterviewAlerts();
+setInterval(checkInterviewAlerts, 30000);
 render();
 </script>
 
