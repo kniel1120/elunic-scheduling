@@ -64,6 +64,15 @@
   }
   .btn.alerts.on { color: #6ee7b7; border-color: #2a4a3a; }
   .btn.alerts.blocked { color: #fca5a5; border-color: #4a2a2a; }
+  .picker-tpl {
+    width: 100%; text-align: left; padding: 12px 14px;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px;
+  }
+  .picker-tpl:hover { background: #2a3040; border-color: var(--accent); }
+  code {
+    background: var(--panel-2); padding: 1px 5px; border-radius: 3px;
+    font-size: 11px; color: #93c5fd;
+  }
   .actions { display: flex; gap: 8px; align-items: center; }
   .btn {
     background: var(--panel-2); color: var(--text);
@@ -343,20 +352,66 @@
 
 <!-- Settings modal -->
 <div class="modal-backdrop" id="settingsBackdrop">
-  <div class="modal">
+  <div class="modal" style="max-width: 640px;">
     <h3>Settings</h3>
     <div class="field">
       <label>Follow-up email signature</label>
       <textarea id="s-signature" rows="4" style="font-family: inherit;"></textarea>
       <div style="color: var(--muted); font-size: 11px; margin-top: 6px;">
-        Used at the bottom of every follow-up email copied to clipboard.
-        Line breaks are preserved.
+        Inserted wherever a template contains <code>{signature}</code>.
       </div>
     </div>
+
+    <div class="field">
+      <label style="display: flex; justify-content: space-between; align-items: center;">
+        <span>Email templates</span>
+        <button class="btn" onclick="openTemplateEditor()" style="font-size: 12px; padding: 4px 10px;">+ New template</button>
+      </label>
+      <div id="templateList" style="display: flex; flex-direction: column; gap: 6px;"></div>
+      <div style="color: var(--muted); font-size: 11px; margin-top: 8px; line-height: 1.5;">
+        Available placeholders: <code>{firstName}</code>, <code>{name}</code>, <code>{date}</code>,
+        <code>{dateEn}</code>, <code>{time}</code>, <code>{time12}</code>,
+        <code>{interviewer}</code>, <code>{type}</code>, <code>{status}</code>, <code>{signature}</code>
+      </div>
+    </div>
+
     <div class="modal-actions">
-      <button class="btn ghost" onclick="resetSettings()" style="margin-right: auto;">Reset to default</button>
+      <button class="btn ghost" onclick="resetSettings()" style="margin-right: auto;">Reset to defaults</button>
       <button class="btn ghost" onclick="closeSettings()">Cancel</button>
       <button class="btn primary" onclick="saveSettingsForm()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template editor modal -->
+<div class="modal-backdrop" id="templateBackdrop">
+  <div class="modal" style="max-width: 640px;">
+    <h3 id="templateModalTitle">New template</h3>
+    <div class="field"><label>Template name</label><input id="t-name" placeholder="e.g. Reminder (DE)" /></div>
+    <div class="field">
+      <label>Body</label>
+      <textarea id="t-body" rows="14" style="font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;"></textarea>
+    </div>
+    <div style="color: var(--muted); font-size: 11px; margin-bottom: 12px;">
+      Placeholders are replaced when copying: <code>{firstName}</code>, <code>{name}</code>,
+      <code>{date}</code>, <code>{dateEn}</code>, <code>{time}</code>, <code>{time12}</code>,
+      <code>{interviewer}</code>, <code>{type}</code>, <code>{status}</code>, <code>{signature}</code>.
+    </div>
+    <div class="modal-actions">
+      <button class="btn danger" id="templateDeleteBtn" onclick="deleteTemplate()" style="margin-right: auto; display: none;">Delete</button>
+      <button class="btn ghost" onclick="closeTemplateEditor()">Cancel</button>
+      <button class="btn primary" onclick="saveTemplate()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Template picker modal -->
+<div class="modal-backdrop" id="pickerBackdrop">
+  <div class="modal" style="max-width: 420px;">
+    <h3 id="pickerTitle">Pick template</h3>
+    <div id="pickerList" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px;"></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closePicker()">Cancel</button>
     </div>
   </div>
 </div>
@@ -407,12 +462,57 @@ const SEED = [];
 // ---------- State ----------
 const STORAGE_KEY = "elunic_scheduling_v1";
 const SETTINGS_KEY = "elunic_settings_v1";
+const DEFAULT_TEMPLATES = [
+  {
+    id: "tpl-reminder-de",
+    name: "Erinnerung (DE)",
+    body:
+`Hallo {firstName},
+
+eine kurze Erinnerung an unser Interview am {date} um {time}.
+
+Bitte gib mir kurz Bescheid, falls sich auf deiner Seite etwas geändert hat. Solltest du vorab noch Fragen haben, melde dich gerne jederzeit bei mir.
+
+Ich freue mich auf unser Gespräch.
+
+{signature}`,
+  },
+  {
+    id: "tpl-noshow-de",
+    name: "No-show Nachfrage (DE)",
+    body:
+`Hallo {firstName},
+
+wir hatten heute um {time} ein Interview vereinbart, aber leider konnte ich dich nicht erreichen. Ich hoffe, bei dir ist alles in Ordnung.
+
+Falls du weiterhin Interesse an der Position hast, lass uns gerne einen neuen Termin finden. Antworte einfach auf diese Nachricht.
+
+{signature}`,
+  },
+  {
+    id: "tpl-reminder-en",
+    name: "Reminder (EN)",
+    body:
+`Hi {firstName},
+
+Just a quick reminder of our interview on {date} at {time}.
+
+Please let me know if anything has changed on your end. Feel free to reach out if you have any questions beforehand.
+
+Looking forward to speaking with you.
+
+{signature}`,
+  },
+];
 const DEFAULT_SETTINGS = {
   signature: "Viele Grüße\nelunic Recruiting Team",
+  templates: DEFAULT_TEMPLATES,
 };
 let candidates = loadCandidates();
 let settings = loadSettings();
 let editingId = null;
+let editingTemplateId = null;
+let pickerCandidateId = null;
 let activeFilter = "all";
 let activeInterviewer = "";
 let searchQuery = "";
@@ -420,7 +520,15 @@ let searchQuery = "";
 function loadSettings() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const merged = { ...DEFAULT_SETTINGS, ...parsed };
+      // Ensure templates exists and is non-empty
+      if (!Array.isArray(merged.templates) || merged.templates.length === 0) {
+        merged.templates = DEFAULT_TEMPLATES;
+      }
+      return merged;
+    }
   } catch (e) {}
   return { ...DEFAULT_SETTINGS };
 }
@@ -674,31 +782,78 @@ function deleteCurrent() {
   });
 }
 
-// ---------- Follow-up template ----------
+// ---------- Follow-up templates ----------
+function fillTemplate(body, c) {
+  const firstName = (c.name || "").split(" ")[0];
+  const deDate = c.date
+    ? new Date(c.date + "T00:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const enDate = c.date
+    ? new Date(c.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const deTime = c.time ? `${c.time} Uhr` : "";
+  return body
+    .replace(/\{firstName\}/g, firstName)
+    .replace(/\{name\}/g, c.name || "")
+    .replace(/\{date\}/g, deDate)
+    .replace(/\{dateEn\}/g, enDate)
+    .replace(/\{time\}/g, deTime)
+    .replace(/\{time12\}/g, fmtTime(c.time))
+    .replace(/\{interviewer\}/g, c.interviewer || "")
+    .replace(/\{type\}/g, c.type || "")
+    .replace(/\{status\}/g, c.status || "")
+    .replace(/\{signature\}/g, settings.signature || "");
+}
+
 function copyFollowup(id) {
   const c = candidates.find(x => x.id === id);
   if (!c) return;
-  const deDate = new Date(c.date + "T00:00:00").toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const deTime = c.time ? `${c.time} Uhr` : "";
-  const tpl =
-`Hallo ${c.name.split(" ")[0]},
+  const tpls = settings.templates || [];
+  if (tpls.length === 0) return toast("No templates defined — add one in Settings", "error");
+  if (tpls.length === 1) {
+    copyTemplate(tpls[0], c);
+    return;
+  }
+  // multiple templates → show picker
+  pickerCandidateId = id;
+  renderTemplatePicker();
+  document.getElementById("pickerBackdrop").classList.add("open");
+}
 
-eine kurze Erinnerung an unser Interview am ${deDate} um ${deTime}.
-
-Bitte gib mir kurz Bescheid, falls sich auf deiner Seite etwas geändert hat. Solltest du vorab noch Fragen haben, melde dich gerne jederzeit bei mir.
-
-Ich freue mich auf unser Gespräch.
-
-${settings.signature}`;
-  navigator.clipboard.writeText(tpl).then(
-    () => toast("Follow-up copied to clipboard"),
+function copyTemplate(tpl, c) {
+  const text = fillTemplate(tpl.body, c);
+  navigator.clipboard.writeText(text).then(
+    () => toast(`"${tpl.name}" copied to clipboard`),
     () => toast("Couldn't copy — your browser blocked it", "error")
   );
+}
+
+function renderTemplatePicker() {
+  const c = candidates.find(x => x.id === pickerCandidateId);
+  if (!c) return;
+  document.getElementById("pickerTitle").textContent = `Pick template for ${c.name}`;
+  const list = document.getElementById("pickerList");
+  list.innerHTML = settings.templates.map((t, i) =>
+    `<button class="btn picker-tpl" onclick="copyFromPicker(${i})">${esc(t.name)}</button>`
+  ).join("");
+}
+
+function copyFromPicker(idx) {
+  const c = candidates.find(x => x.id === pickerCandidateId);
+  const tpl = settings.templates[idx];
+  if (c && tpl) copyTemplate(tpl, c);
+  closePicker();
+}
+
+function closePicker() {
+  document.getElementById("pickerBackdrop").classList.remove("open");
+  pickerCandidateId = null;
 }
 
 // ---------- Settings ----------
 function openSettings() {
   document.getElementById("s-signature").value = settings.signature;
+  renderTemplateList();
   document.getElementById("settingsBackdrop").classList.add("open");
 }
 function closeSettings() {
@@ -711,13 +866,109 @@ function saveSettingsForm() {
   toast("Settings saved");
 }
 function resetSettings() {
-  settings = { ...DEFAULT_SETTINGS };
-  saveSettingsToStorage();
-  document.getElementById("s-signature").value = settings.signature;
-  toast("Reset to default");
+  askConfirm({
+    title: "Reset all settings?",
+    body: "This restores the default signature and the original built-in templates. Any custom templates you've added will be lost.",
+    okLabel: "Yes, reset",
+    onConfirm: () => {
+      settings = JSON.parse(JSON.stringify(DEFAULT_SETTINGS));
+      saveSettingsToStorage();
+      document.getElementById("s-signature").value = settings.signature;
+      renderTemplateList();
+      toast("Reset to defaults");
+    },
+  });
 }
 document.getElementById("settingsBackdrop").addEventListener("click", (e) => {
   if (e.target.id === "settingsBackdrop") closeSettings();
+});
+
+function renderTemplateList() {
+  const el = document.getElementById("templateList");
+  if (!settings.templates || settings.templates.length === 0) {
+    el.innerHTML = `<div style="color: var(--muted); font-size: 12px; padding: 8px 0;">No templates yet.</div>`;
+    return;
+  }
+  el.innerHTML = settings.templates.map((t, i) => `
+    <div style="display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 6px;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-weight: 500;">${esc(t.name)}</div>
+        <div style="color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${esc((t.body || "").slice(0, 80))}…</div>
+      </div>
+      <div style="display: flex; gap: 4px; flex-shrink: 0;">
+        ${i > 0 ? `<button class="btn" onclick="moveTemplate('${t.id}', -1)" style="padding: 4px 8px;" title="Move up">↑</button>` : ""}
+        ${i < settings.templates.length - 1 ? `<button class="btn" onclick="moveTemplate('${t.id}', 1)" style="padding: 4px 8px;" title="Move down">↓</button>` : ""}
+        <button class="btn" onclick="openTemplateEditor('${t.id}')" style="padding: 4px 10px;">Edit</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+function moveTemplate(id, dir) {
+  const idx = settings.templates.findIndex(t => t.id === id);
+  const newIdx = idx + dir;
+  if (idx < 0 || newIdx < 0 || newIdx >= settings.templates.length) return;
+  const arr = settings.templates;
+  [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+  saveSettingsToStorage();
+  renderTemplateList();
+}
+
+function openTemplateEditor(id) {
+  editingTemplateId = id || null;
+  const t = id ? settings.templates.find(x => x.id === id) : { name: "", body: "" };
+  document.getElementById("templateModalTitle").textContent = id ? "Edit template" : "New template";
+  document.getElementById("t-name").value = t.name || "";
+  document.getElementById("t-body").value = t.body || "";
+  document.getElementById("templateDeleteBtn").style.display = id ? "inline-block" : "none";
+  document.getElementById("templateBackdrop").classList.add("open");
+}
+function closeTemplateEditor() {
+  document.getElementById("templateBackdrop").classList.remove("open");
+  editingTemplateId = null;
+}
+function saveTemplate() {
+  const name = document.getElementById("t-name").value.trim();
+  const body = document.getElementById("t-body").value;
+  if (!name) return toast("Template needs a name", "error");
+  if (!body.trim()) return toast("Template body can't be empty", "error");
+  if (editingTemplateId) {
+    const t = settings.templates.find(x => x.id === editingTemplateId);
+    t.name = name; t.body = body;
+  } else {
+    settings.templates.push({ id: "tpl-" + cryptoId(), name, body });
+  }
+  saveSettingsToStorage();
+  closeTemplateEditor();
+  renderTemplateList();
+  toast(editingTemplateId ? "Template updated" : "Template added");
+}
+function deleteTemplate() {
+  if (!editingTemplateId) return;
+  if (settings.templates.length <= 1) {
+    return toast("Can't delete the last template", "error");
+  }
+  const t = settings.templates.find(x => x.id === editingTemplateId);
+  const id = editingTemplateId;
+  askConfirm({
+    title: `Delete template "${t.name}"?`,
+    body: "This template will be permanently removed.",
+    okLabel: "Yes, delete",
+    onConfirm: () => {
+      settings.templates = settings.templates.filter(x => x.id !== id);
+      saveSettingsToStorage();
+      closeTemplateEditor();
+      renderTemplateList();
+      toast("Template deleted");
+    },
+  });
+}
+
+document.getElementById("templateBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "templateBackdrop") closeTemplateEditor();
+});
+document.getElementById("pickerBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "pickerBackdrop") closePicker();
 });
 
 // ---------- CSV import / export ----------
@@ -904,7 +1155,9 @@ document.getElementById("modalBackdrop").addEventListener("click", (e) => {
   if (e.target.id === "modalBackdrop") closeModal();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeModal(); closeSettings(); confirmCancel(); }
+  if (e.key === "Escape") {
+    closeModal(); closeSettings(); closeTemplateEditor(); closePicker(); confirmCancel();
+  }
 });
 
 // ---------- Toast ----------
