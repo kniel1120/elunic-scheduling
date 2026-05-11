@@ -434,7 +434,11 @@
     </div>
     <div class="field-row">
       <div class="field"><label>Date</label><input id="f-date" type="date" /></div>
-      <div class="field"><label>Time</label><input id="f-time" type="time" /></div>
+      <div class="field">
+        <label>Time</label>
+        <input id="f-time" type="time" oninput="updateTimeHint()" />
+        <div id="f-time-hint" style="color: var(--muted); font-size: 11px; margin-top: 4px; font-variant-numeric: tabular-nums;"></div>
+      </div>
     </div>
     <div class="field"><label>Status</label>
       <select id="f-status">
@@ -737,6 +741,17 @@ function openModal(id) {
   document.getElementById("f-notes").value = c.notes || "";
   document.getElementById("deleteBtn").style.display = id ? "inline-block" : "none";
   document.getElementById("modalBackdrop").classList.add("open");
+  updateTimeHint();
+}
+function updateTimeHint() {
+  const v = document.getElementById("f-time").value;
+  const el = document.getElementById("f-time-hint");
+  if (!v) { el.textContent = ""; return; }
+  const [hh, mm] = v.split(":");
+  const h24 = +hh;
+  const ampm = h24 >= 12 ? "PM" : "AM";
+  const h12 = h24 % 12 || 12;
+  el.textContent = `24h: ${v}   ·   shows as ${h12}:${mm} ${ampm}`;
 }
 function closeModal() {
   document.getElementById("modalBackdrop").classList.remove("open");
