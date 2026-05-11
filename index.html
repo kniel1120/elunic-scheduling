@@ -250,6 +250,7 @@
     <button class="btn ghost alerts" id="alertsBtn" onclick="requestAlerts()">🔔 Enable alerts</button>
     <button class="btn ghost" onclick="document.getElementById('csvFile').click()">Import CSV</button>
     <button class="btn ghost" onclick="exportCsv()">Export CSV</button>
+    <button class="btn ghost" onclick="openSettings()">⚙ Settings</button>
     <button class="btn ghost danger" onclick="clearAll()">Clear all</button>
     <button class="btn primary" onclick="openModal()">+ Add Candidate</button>
   </div>
@@ -340,6 +341,26 @@
   </div>
 </div>
 
+<!-- Settings modal -->
+<div class="modal-backdrop" id="settingsBackdrop">
+  <div class="modal">
+    <h3>Settings</h3>
+    <div class="field">
+      <label>Follow-up email signature</label>
+      <textarea id="s-signature" rows="4" style="font-family: inherit;"></textarea>
+      <div style="color: var(--muted); font-size: 11px; margin-top: 6px;">
+        Used at the bottom of every follow-up email copied to clipboard.
+        Line breaks are preserved.
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="resetSettings()" style="margin-right: auto;">Reset to default</button>
+      <button class="btn ghost" onclick="closeSettings()">Cancel</button>
+      <button class="btn primary" onclick="saveSettingsForm()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Edit/Add modal -->
 <div class="modal-backdrop" id="modalBackdrop">
   <div class="modal">
@@ -385,11 +406,25 @@ const SEED = [];
 
 // ---------- State ----------
 const STORAGE_KEY = "elunic_scheduling_v1";
+const SETTINGS_KEY = "elunic_settings_v1";
+const DEFAULT_SETTINGS = {
+  signature: "Viele Grüße\nelunic Recruiting Team",
+};
 let candidates = loadCandidates();
+let settings = loadSettings();
 let editingId = null;
 let activeFilter = "all";
 let activeInterviewer = "";
 let searchQuery = "";
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (raw) return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch (e) {}
+  return { ...DEFAULT_SETTINGS };
+}
+function saveSettingsToStorage() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
 
 function loadCandidates() {
   try {
@@ -654,13 +689,36 @@ Bitte gib mir kurz Bescheid, falls sich auf deiner Seite etwas geändert hat. So
 
 Ich freue mich auf unser Gespräch.
 
-Viele Grüße
-elunic Recruiting Team`;
+${settings.signature}`;
   navigator.clipboard.writeText(tpl).then(
     () => toast("Follow-up copied to clipboard"),
     () => toast("Couldn't copy — your browser blocked it", "error")
   );
 }
+
+// ---------- Settings ----------
+function openSettings() {
+  document.getElementById("s-signature").value = settings.signature;
+  document.getElementById("settingsBackdrop").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("settingsBackdrop").classList.remove("open");
+}
+function saveSettingsForm() {
+  settings.signature = document.getElementById("s-signature").value;
+  saveSettingsToStorage();
+  closeSettings();
+  toast("Settings saved");
+}
+function resetSettings() {
+  settings = { ...DEFAULT_SETTINGS };
+  saveSettingsToStorage();
+  document.getElementById("s-signature").value = settings.signature;
+  toast("Reset to default");
+}
+document.getElementById("settingsBackdrop").addEventListener("click", (e) => {
+  if (e.target.id === "settingsBackdrop") closeSettings();
+});
 
 // ---------- CSV import / export ----------
 document.getElementById("csvFile").addEventListener("change", (e) => {
@@ -846,7 +904,7 @@ document.getElementById("modalBackdrop").addEventListener("click", (e) => {
   if (e.target.id === "modalBackdrop") closeModal();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeModal();
+  if (e.key === "Escape") { closeModal(); closeSettings(); confirmCancel(); }
 });
 
 // ---------- Toast ----------
